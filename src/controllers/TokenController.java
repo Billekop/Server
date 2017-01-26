@@ -22,8 +22,8 @@ public class TokenController {
 
         User foundUser = db.authenticate(username, password);
         if (foundUser != null) {
-
-            token = Crypter.buildToken("abcdefghijklmnopqrstuvxyz1234567890@&%!?", 25);
+//fjernet # i buildtoken
+            token = Crypter.buildToken("abcdefghijklmnopqrstuvxyz1234567890@%!?", 25);
 
             db.addToken(token, foundUser.getUserID());
 
@@ -42,6 +42,13 @@ public class TokenController {
         db.close();
         return user;
 
+    }
+    //ny
+    public boolean updateUser (int id, String data) throws SQLException{
+        DBConnector db = new DBConnector();
+        boolean ret = db.editUser(id, data);
+        db.close();
+        return ret;
     }
 
     public boolean deleteToken(String token) throws SQLException{

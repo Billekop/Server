@@ -11,8 +11,10 @@ import model.UserLogin;
 
 import javax.ws.rs.*;
 import javax.ws.rs.core.Response;
-import java.sql.SQLException;
 
+import java.sql.SQLException;
+import java.util.ArrayList;
+// Iendpoints klassen vil hostes på URI path "/users"
 // implements IEndpoints The Java class will be hosted at the URI path "/users"
 @Path("/user")
 public class UsersEndpoint  {
@@ -22,52 +24,141 @@ public class UsersEndpoint  {
     public UsersEndpoint() {
     }
 
-    @GET
-    // The Java method will produce content identified by the MIME Media type "text/plain"
+
+
+@Path("/create")
+@POST
+@Produces("application/json")
+public Response create(String newUserData) throws Exception {
+    if(!newUserData.equals("")){
+        if (controller.addUser(newUserData)) {
+            //test om den returnerer dette på post.
+            return Response
+                    .status(200)
+                    .entity("{\"Status:\":\"Din bruger er nu tilføjet\"}")
+                    .build();
+        }
+        else
+            return Response.status(400).entity("{\"Status:\":\"Det lykkedes ikke at oprette en bruger\"}").build();
+    }
+    else
+        return Response.status(400).entity("{\"message\":\"Det lykkedes ikke at oprette en bruger\"}").build();
+}
+
+ @Path("/{id}")
+ @DELETE
+ public Response delete (@HeaderParam("authorization") String authToken, @PathParam("id") int userId) throws SQLException {
+
+     User user = tokenController.getUserFromTokens(authToken);
+
+     if (user != null){
+         if(controller.deleteUser(userId)) {
+             return Response.status(200).entity("{\"Status:\":\"Din bruger er nu slettet. Fortsat god dag \"}").build();
+         }
+         else return Response.status(400).entity("{\"Status:\":\"Vi kunne desværre ikke slette din bruger\"}").build();
+     }else return Response.status(400).entity("{\"Status\":\"Vi kunne desværre ikke slette din bruger\"}").build();
+
+
+ }
+
+
+
+    /**
+     * Metode til login.
+     *
+     * @param data
+     * @return
+     * @throws SQLException
+     */
+@POST
+@Path("/login")
+@Produces("application/json")
+public Response login(String data) throws SQLException {
+
+
+    UserLogin userLogin = new Gson().fromJson(data, UserLogin.class);
+
+    String token = tokenController.authenticate(userLogin.getUsername(), Digester.hashWithSalt(userLogin.getPassword()));
+
+    if (token != null) {
+        //tjek om den returnerer dette på post.
+        return Response
+                .status(200)
+                .entity(new Gson().toJson(token))
+                .build();
+    } else return Response
+            .status(401)
+            .build();
+}
+
+    //parth getuser. Når denne path rammes, bliver der først lavet et response, derefter henter den
+    // token som string, fra getuserfromToken. sætter user lig med token fra tokencontroller.
+
+    @POST
+    @Path("/getuser")
     @Produces("application/json")
-
-    public Response get(@HeaderParam("authorization") String authToken) throws SQLException {
-
-        User user = tokenController.getUserFromTokens(authToken);
-
-        if (user != null){
-            if (controller.getUsers() != null) {
-                return Response
-                        .status(200)
-                        .entity(new Gson().toJson(Crypter.encryptDecryptXOR(new Gson().toJson(controller.getUsers()))))
-                       // .entity((Crypter.encryptDecryptXOR(new Gson().toJson(controller.getUsers()))))
-                        //ændret
-                        .build();
-            } else {
-                return Response
-                        //error response
-                        .status(400)
-                        .entity("{\"message\":\"failed\"}")
-                        .build();
-            }
-        }else return Response.status(400).entity("{\"message\":\"failed\"}").build();
-
+    public Response getUserFromToken(String token) throws SQLException {
+        token = token.replaceAll("\"", "");
+        User user = tokenController.getUserFromTokens(token);
+        if (token != null) {
+            //demo til tjek om den returerner på denne post
+            return Response
+                    .status(200)
+                    .entity(new Gson().toJson(user))
+                    .build();
+        } else return Response
+                .status(401)
+                .build();
     }
 
-    @Path("/{id}")
+    /**
+     * Metode til at hente alle user
+     *
+     * @return
+     * @throws SQLException
+     */
+    @POST
+    @Path("/getallusers")
     @Produces("application/json")
-    @GET
-    public Response get(@HeaderParam("authorization") String authToken, @PathParam("id") int userId) throws SQLException {
+    public Response getAllUsers() throws SQLException {
+        ArrayList<User> u = controller.getUsers();
 
-        User user = tokenController.getUserFromTokens(authToken);
+        if (u != null) {
+            //demo to check if it returns this on post.
+            return Response
+                    .status(200)
+                    .entity(new Gson().toJson(u))
+                    .build();
+        } else return Response
+                .status(401)
+                .build();
+    }
 
-        if (user != null){
-            if (controller.getUser(userId)!=null) {
-                return Response
-                        .status(200)
-                        //.entity(new Gson().toJson(Crypter.encryptDecryptXOR(new Gson().toJson(controller.getUsers()))))
-                        .entity((Crypter.encryptDecryptXOR(new Gson().toJson(controller.getUser(userId)))))
-                        //ændret
-                        .build();
-            }
+
+    /**
+     *Metode til at opdatere brugeren som er logget ind.
+     *
+     *
+     * @param data
+     * @return
+     * @throws SQLException
+     */
+    @Path("/updateuser")
+    @Produces("application/json")
+    @POST
+    //modificeret. Rammes med informationen "data". Derefter laves et datasplit i 5 hashes.
+    public Response updateUser( String data) throws SQLException {
+        String[] dataanduserid = data.split("#####");
+        int userId = Integer.parseInt(dataanduserid[0]);
+        data = dataanduserid[1];
+        System.out.println("For userID and data:" + userId+"//" + data);
+        boolean ret = tokenController.updateUser(userId, data);
+
+
+        if (ret){
             return Response
                     .status(400)
-                    .entity("{\"message\":\"failed\"}")
+                    .entity("{\"message\":\"Der er nu blevet opdateret information for: Userid\":"+userId+"}")
                     .build();
 
         } else return Response
@@ -76,108 +167,50 @@ public class UsersEndpoint  {
                 .build();
     }
 
-    @PUT
-    @Path("/{Id}")
-    @Produces("application/json")
-
-    public Response edit(@HeaderParam("authorization") String authToken, @PathParam("Id") int id, String data) throws SQLException {
-
-        User user = tokenController.getUserFromTokens(authToken);
-
-        if (user != null){
-            String s = new Gson().fromJson(data,String.class);
-            String decrypt = Crypter.encryptDecryptXOR(s);
-            if (controller.getUser(id) != null) {
-                if (controller.editUser(id, decrypt)) {
-                    return Response
-                            .status(200)
-                            .entity("{\"message\":\"Success! User edited\"}")
-                            .build();
-                } else {
-                    return Response
-                            .status(400)
-                            .entity("{\"message\":\"failed\"}")
-                            .build();
-                }
-            } else {
-                return Response
-                        .status(400)
-                        .entity("{\"message\":\"failed. No such user\"}")
-                        .build();
-            }
-
-        }else return Response.status(400).entity("{\"message\":\"failed\"}").build();
-
-
-    }
-
-    @POST
-    @Produces("application/json")
-    public Response create(String data) throws Exception {
-        String s = new Gson().fromJson(data,String.class);
-       String decrypt = Crypter.encryptDecryptXOR(s);
-        if (controller.addUser(decrypt)) {
-            //demo to check if it returns this on post.
-            return Response
-                    .status(200)
-                    .entity("{\"message\":\"Success! User added\"}")
-                    .build();
-        }
-        else return Response.status(400).entity("{\"message\":\"failed\"}").build();
-    }
-
-    @Path("/{id}")
-    @DELETE
-    public Response delete (@HeaderParam("authorization") String authToken, @PathParam("id") int userId) throws SQLException {
-
-        User user = tokenController.getUserFromTokens(authToken);
-
-        if (user != null){
-            if(controller.deleteUser(userId)) {
-                return Response.status(200).entity("{\"message\":\"Success! User deleted\"}").build();
-            }
-            else return Response.status(400).entity("{\"message\":\"failed\"}").build();
-        }else return Response.status(400).entity("{\"message\":\"failed\"}").build();
-
-
-    }
-
-    @POST
-    @Path("/login")
-    @Produces("application/json")
-    public Response login(String data) throws SQLException {
-        String decrypt = Crypter.encryptDecryptXOR(data); //Fjernes når din klient krypterer.
-        decrypt = Crypter.encryptDecryptXOR(decrypt);
-
-        UserLogin userLogin = new Gson().fromJson(decrypt, UserLogin.class);
-
-        String token = tokenController.authenticate(userLogin.getUsername(), userLogin.getPassword());
-
-        if (token != null) {
-            //demo to check if it returns this on post.
-            return Response
-                .status(200)
-                .entity(new Gson().toJson(token))
-                .build();
-        } else return Response
-            .status(401)
-            .build();
-    }
-
-    @POST
+    /**
+     * Method to handle the log out functionality
+     *
+     * @param token
+     * @return
+     * @throws SQLException
+     */
+    @POST //dette er den nye logout. sat ind.
     @Path("/logout")
-    public Response logout (String data) throws SQLException {
-        if(tokenController.deleteToken(data)) {
+    public Response logout (String token) throws SQLException {
+        token = token.replaceAll("\"", ""); //Det token som sendes til url indeholder en ". Det bliver fjernet her, så det passer med det token i DB.
+        if(tokenController.deleteToken(token)) {
+
             return Response
                     .status(200)
-                    .entity("Success!")
+                    .entity("Du er logget ud.")
                     .build();
 
         } else return Response
-                    .status(400)
-                    .entity("Failure")
-                    .build();
+                .status(400)
+                .entity("Du blev desværre ikke logget ud")
+                .build();
+    }
+    /**
+     * Metode til at slette bruger samt token.
+     * @param token
+     * @return
+     * @throws SQLException
+     */
+    @POST
+    @Path("/deleteuser")
+    public Response deleteUser (String token) throws SQLException {
+        token = token.replaceAll("\"", ""); //Det token som sendes til url indeholder en ". Det bliver fjernet her, så det passer med det token i DB.
+        User user = tokenController.getUserFromTokens(token);
+        if (user != null){
+            if(controller.deleteUser(user.getUserID())) {
+                tokenController.deleteToken(token);
+                return Response.status(200).entity("{\"Status\":\"Din bruger er nu slettet-server\"}").build();
+            }
+            else
+                return Response.status(400).entity("{\"Status\":\"Din bruger blev desværre ikke slettet\"}").build();
+        }else
+            return Response.status(400).entity("{\"Status\":\"Din bruger blev desværre ikke slettet\"}").build();
+
     }
 
 }
-

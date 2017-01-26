@@ -9,6 +9,8 @@ import model.User;
 import java.sql.*;
 import java.util.ArrayList;
 
+
+
 /**
  * Created by mortenlaursen on 17/10/2016.
  */
@@ -19,14 +21,15 @@ public class DBConnector {
      * @throws Exception
      */
     // JDBC driver name and database URL
+            //useSSL=false, grundet error
     static final String JDBC_DRIVER = "com.mysql.jdbc.Driver";
-    static final String DB_URL = "jdbc:mysql://" + Config.getDbUrl() + ":" + Config.getDbPort() + "/" + Config.getDbName();
+    static final String DB_URL = "jdbc:mysql://" + Config.getDbUrl() + ":" + Config.getDbPort() + "/" + Config.getDbName()+"?verifyServerCertificate=false&useSSL=true";
 
     //  Database credentials
     static final String USER = Config.getDbUserName();
     static final String PASS = Config.getDbPassword();
 
-    //String sql; Not needed anymore after introducing prepared statements.
+    //
     Connection conn = null;
     Statement stmt = null;
 
@@ -127,7 +130,7 @@ public class DBConnector {
         }
         return user;
     }
-
+//måske ny?
     public boolean editUser(int id, String data) throws SQLException {
         User u = new Gson().fromJson(data,User.class);
         PreparedStatement editUserStatement = conn
@@ -170,8 +173,7 @@ public class DBConnector {
 
     public boolean deleteUser(int id) throws SQLException {
 
-        PreparedStatement deleteUserStatement = conn.prepareStatement("UPDATE Users SET Deleted = 1 WHERE UserID=?");
-
+        PreparedStatement deleteUserStatement = conn.prepareStatement("DELETE FROM Users WHERE UserID=?"); //conn.prepareStatement("UPDATE Users SET Deleted = 1 WHERE UserID=?");
         try {
             deleteUserStatement.setInt(1, id);
             deleteUserStatement.executeUpdate();
@@ -180,6 +182,7 @@ public class DBConnector {
         }
         return true;
     }
+
 
     /*Curriculum methods*/
     public ArrayList getCurriculums() throws IllegalArgumentException {
@@ -509,21 +512,45 @@ public class DBConnector {
         ResultSet resultSet = null;
         User userFromToken = null;
 
+//http://www.w3schools.com/sql/sql_join_inner.asp
+        //Inner JOIN vælger alle rows fra tables så længe der er match mellem kolonerne i de forskellige tables.
 
-
+        int userid=-1;
+        boolean usertype=false;
+        String firstname="",lastname="",username="",email="",password="";
         try {
 
             PreparedStatement getUserFromToken = conn
-                    .prepareStatement("select Tokens.user_id, Users.Usertype from Tokens inner join Users on Tokens.user_id = Users.UserID where Tokens.token = ?");
+                    .prepareStatement("select Tokens.user_id, Users.Usertype, Users.first_name, Users.last_name, Users.username, Users.email, Users.password from Tokens inner join Users on Tokens.user_id = Users.UserID where Tokens.token = ?");
             getUserFromToken.setString(1, token);
+            //executer query i Databasen (svarer til refresh-og-kør)
             resultSet = getUserFromToken.executeQuery();
-
+//http://www.journaldev.com/2489/jdbc-statement-vs-preparedstatement-sql-injection-example
+            // modificeret fra den forrige metode, som blev lavet til hackathon. I den forrige metode var der kun user_id og usertype.
             while (resultSet.next()) {
 
                 userFromToken = new User();
+                userid 		= resultSet.getInt("user_id");
+                usertype 	= resultSet.getBoolean("Usertype");
+                firstname 	= resultSet.getString("first_name");
+                lastname 	= resultSet.getString("last_name");
+                username 	= resultSet.getString("Username");
+                email 		= resultSet.getString("email");
+                password 	= resultSet.getString("password");
 
-                userFromToken.setUserID(resultSet.getInt("user_id"));
-                userFromToken.setUserType(resultSet.getBoolean("Usertype"));
+                firstname 	= firstname==null ? "":firstname;
+                lastname 	= lastname==null ? "":lastname;
+                username	= username==null ? "":username;
+                email 		= email==null ? "":email;
+                password 	= password==null ? "":password;
+
+                userFromToken.setUserID(userid);
+                userFromToken.setUserType(usertype);
+                userFromToken.setFirstName(firstname);
+                userFromToken.setLastName(lastname);
+                userFromToken.setUsername(username);
+                userFromToken.setEmail(email);
+                userFromToken.setPassword(password);
 
             }
         } catch (SQLException sqlException) {
@@ -533,11 +560,15 @@ public class DBConnector {
 
     }
 
-    public void addToken(String token, int userId) {
 
-        PreparedStatement addTokenStatement;
+
+
+      //Prepared statement er flyttet fra try catch. Sammen måde som DeleteToken metoden.
+    public void addToken(String token, int userId) throws SQLException {
+        System.out.println("========"+token+"---"+userId);
+        PreparedStatement addTokenStatement = conn.prepareStatement("INSERT INTO Tokens (token, user_id) VALUES (?,?)");
         try {
-            addTokenStatement = conn.prepareStatement("INSERT INTO Tokens (token, user_id) VALUES (?,?)");
+
             addTokenStatement.setString(1, token);
             addTokenStatement.setInt(2, userId);
             addTokenStatement.executeUpdate();
